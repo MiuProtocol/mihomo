@@ -1724,6 +1724,9 @@ proxies: # socks5
     # jls-opts: # 使用 sni 作为 JLS SNI
     #   username: jls-user
     #   password: jls-password
+    # reality-opts: # AnyTLS over REALITY，使用 sni 作为 REALITY servername，必须同时设置 client-fingerprint
+    #   public-key: xxx
+    #   short-id: xxx # optional
 
   # miu
   - name: miu
