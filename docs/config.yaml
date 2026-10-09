@@ -1725,6 +1725,27 @@ proxies: # socks5
     #   username: jls-user
     #   password: jls-password
 
+  # miu
+  - name: miu
+    type: miu
+    server: 1.2.3.4
+    port: 443
+    psk: "<your psk>" # 与服务端逐字符相同的字符串，至少 16 个字符
+    udp: true
+    tls: true # 可省略，miu 始终跑在 TLS 之上
+    # sni: "example.com" # 也可以写成 servername
+    # skip-cert-verify: true
+    # fingerprint: xxxx # 证书指纹
+    # client-fingerprint: chrome
+    # alpn:
+    #   - h2
+    #   - http/1.1
+    # reality-opts: # 写了它外层就是 REALITY，此时必须同时写 client-fingerprint
+    #   public-key: xxxx
+    #   short-id: xxxx
+    # idle-session-timeout: 30 # seconds
+    # min-idle-session: 2
+
   # trusttunnel
   - name: trusttunnel
     type: trusttunnel
