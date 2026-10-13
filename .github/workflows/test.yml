@@ -12,6 +12,7 @@ on:
   pull_request:
     branches:
       - Alpha
+      - "ci-base/**"
 
 jobs:
   test:

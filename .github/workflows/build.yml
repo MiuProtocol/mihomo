@@ -17,6 +17,7 @@ on:
   pull_request:
     branches:
       - Alpha
+      - "ci-base/**"
 concurrency:
   group: "${{ github.workflow }}-${{ github.ref }}"
   cancel-in-progress: true
