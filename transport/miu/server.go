@@ -83,7 +83,8 @@ func (t *trafficCounter) snapshot() Traffic {
 // ServerConfig configures a Server. Only Users is required.
 type ServerConfig struct {
 	Users []User
-	// PaddingScheme overrides the built-in scheme; clients with a different one are sent this one.
+	// PaddingScheme, when set, is the scheme of every lane; clients with a different one are sent this
+	// one. When empty each user's lanes use the scheme derived from that user's PSK.
 	PaddingScheme string
 	// IdleTimeout is how long a lane without a stream is kept (default 180s). Clients are told.
 	IdleTimeout time.Duration
@@ -183,7 +184,8 @@ func (s *Server) Serve(ctx context.Context, conn net.Conn) error {
 	if _, err := io.ReadFull(conn, h[:]); err != nil {
 		return fmt.Errorf("miu: auth failed: %w", err)
 	}
-	user, ok := s.users[[32]byte(h[:32])]
+	token := [32]byte(h[:32])
+	user, ok := s.users[token]
 	if !ok {
 		return ErrAuth
 	}
@@ -194,7 +196,15 @@ func (s *Server) Serve(ctx context.Context, conn net.Conn) error {
 	}
 
 	l := newLane(conn, true, !s.cfg.DisableRaw)
-	l.scheme.Store(s.scheme)
+	laneScheme := s.scheme
+	if s.cfg.PaddingScheme == "" {
+		derived, err := derivePaddingScheme(token)
+		if err != nil {
+			return err
+		}
+		laneScheme = derived
+	}
+	l.scheme.Store(laneScheme)
 	// Close the lane when ctx is done.
 	go func() {
 		select {
@@ -306,13 +316,14 @@ func (s *Server) Serve(ctx context.Context, conn net.Conn) error {
 }
 
 // handleSettings notes whether the client can receive raw segments and answers with ServerSettings,
-// followed by the server's padding scheme when the client's md5 differs.
+// followed by the lane's padding scheme when the client's md5 differs.
 func (s *Server) handleSettings(l *lane, text string) error {
 	kv := parseKV(text)
 	l.peerRaw.Store(kv["raw"] == "1")
 	reply := appendFrame(nil, frServerSettings, l.settingsText(fmt.Sprintf("\nidle=%d", int(s.cfg.IdleTimeout/time.Second))))
-	if md5 := strings.ToLower(strings.TrimSpace(kv["padding-md5"])); md5 != "" && md5 != s.scheme.md5 {
-		reply = appendFrame(reply, frUpdatePadding, s.scheme.raw)
+	scheme := l.scheme.Load()
+	if md5 := strings.ToLower(strings.TrimSpace(kv["padding-md5"])); md5 != "" && md5 != scheme.md5 {
+		reply = appendFrame(reply, frUpdatePadding, scheme.raw)
 	}
 	return l.writeUnshaped(reply)
 }

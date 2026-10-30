@@ -14,11 +14,22 @@ import (
 //	<idx>=<a>-<b>[,c,<a>-<b>...]   packet idx is cut into TLS records with a random length in each range;
 //	                               "c" means: stop here if the payload has run out
 //
-// The client starts from the built-in scheme; the server pushes its own when the md5 differs.
+// Both sides start from the scheme derived from the PSK (derived.go) unless one is configured; the server
+// pushes its own when the md5 differs and the client keeps the last one pushed.
 
 const checkMark = -1
 
-// DefaultPaddingScheme is the scheme both sides start from.
+const (
+	// derivedProfileSalt / Info / Block / Budget are the HKDF parameters and
+	// per-PSK budget used by derivePaddingScheme.
+	derivedProfileSalt   = "miu/v2/padding-profile/salt"
+	derivedProfileInfo   = "miu/v2/padding-profile/v1/psk-only"
+	derivedProfileBlock  = 128
+	derivedProfileBudget = 1984
+)
+
+// DefaultPaddingScheme is the AnyTLS default scheme. A new lane holds it only until the derived or
+// configured scheme is stored.
 const DefaultPaddingScheme = `stop=8
 0=30-30
 1=100-400

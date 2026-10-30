@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -49,12 +50,18 @@ type ClientConfig struct {
 	MinIdle int
 	// DisableRaw turns raw segments off: the client declares raw=0 and never sends any.
 	DisableRaw bool
+	// PaddingScheme overrides the derived padding profile. Leave empty to derive one from the PSK
+	// (the default). If non-empty the text must be a valid scheme or NewClient returns an error.
+	PaddingScheme string
 }
 
 // Client opens streams to one server over a pool of lanes.
 type Client struct {
 	cfg   ClientConfig
 	token [32]byte
+	// scheme is what a new lane starts from: the configured or PSK-derived one until a server sends
+	// UpdatePaddingScheme, then the last one it sent (in memory only).
+	scheme atomic.Pointer[paddingScheme]
 
 	mu       sync.Mutex
 	idle     []idleLane
@@ -85,7 +92,21 @@ func NewClient(cfg ClientConfig) (*Client, error) {
 	if cfg.MinIdle <= 0 {
 		cfg.MinIdle = defaultMinIdle
 	}
-	return &Client{cfg: cfg, token: token}, nil
+	var scheme *paddingScheme
+	if cfg.PaddingScheme != "" {
+		scheme = parsePaddingScheme(cfg.PaddingScheme)
+		if scheme == nil {
+			return nil, errors.New("miu: bad padding scheme")
+		}
+	} else {
+		scheme, err = derivePaddingScheme(token)
+		if err != nil {
+			return nil, err
+		}
+	}
+	c := &Client{cfg: cfg, token: token}
+	c.scheme.Store(scheme)
+	return c, nil
 }
 
 // TLSDialer returns a ClientConfig.Dial that connects to address over TCP and performs a TLS handshake
@@ -117,6 +138,8 @@ func (c *Client) dial(ctx context.Context) (*lane, error) {
 		return nil, err
 	}
 	l := newLane(conn, false, !c.cfg.DisableRaw)
+	l.client = c
+	l.scheme.Store(c.scheme.Load())
 	scheme := l.scheme.Load()
 	padlen := scheme.padding0()
 	hello := append(make([]byte, 0, authHead+int(padlen)+64), c.token[:]...)

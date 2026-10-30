@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/metacubex/mihomo/common/once"
@@ -42,6 +43,7 @@ type MiuOption struct {
 	RealityOpts        RealityOptions `proxy:"reality-opts,omitempty"`
 	IdleSessionTimeout int            `proxy:"idle-session-timeout,omitempty"`
 	MinIdleSession     int            `proxy:"min-idle-session,omitempty"`
+	PaddingScheme      []string       `proxy:"padding-scheme,omitempty"`
 }
 
 // DialContext implements C.ProxyAdapter
@@ -163,11 +165,12 @@ func NewMiu(option MiuOption) (*Miu, error) {
 	}
 
 	outbound.client, err = miu.NewClient(miu.ClientConfig{
-		PSK:        option.PSK,
-		Dial:       outbound.dialLane,
-		LaneIdle:   time.Duration(option.IdleSessionTimeout) * time.Second,
-		MinIdle:    option.MinIdleSession,
-		DisableRaw: !miuRawUsable(),
+		PSK:           option.PSK,
+		Dial:          outbound.dialLane,
+		LaneIdle:      time.Duration(option.IdleSessionTimeout) * time.Second,
+		MinIdle:       option.MinIdleSession,
+		DisableRaw:    !miuRawUsable(),
+		PaddingScheme: strings.Join(option.PaddingScheme, "\n"),
 	})
 	if err != nil {
 		return nil, err
